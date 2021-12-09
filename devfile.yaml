@@ -1,21 +1,78 @@
 apiVersion: 1.0.0
 metadata:
-  name: nodejs-with-db
-projects:
-  - name: nodejs-mongo-app
-    source:
-      type: git
-      location: 'https://github.com/ijason/NodeJS-Sample-App.git'
-      commitId: 187d468 # refers to the last commitId the project compiles (with express3)
+  name: chectl-generated
 components:
-  - type: openshift
-    reference: https://raw.githubusercontent.com/redhat-developer/devfile/master/samples/web-nodejs-with-db-sample/mongo-db.yaml
-  - alias: nodejs-app
-    type: openshift
-    reference: https://raw.githubusercontent.com/redhat-developer/devfile/master/samples/web-nodejs-with-db-sample/nodejs-app.yaml
-commands:
-  - name: run 
-    actions:
-      - type: exec
-        component: nodejs-app
-        command: cd ${CHE_PROJECTS_ROOT}/nodejs-mongo-app/EmployeeDB/ && npm install && sed -i -- ''s/localhost/mongo/g'' app.js && node app.js
+  - type: kubernetes
+    alias: app=python-basic
+    referenceContent: |
+      kind: List
+      apiVersion: v1
+      metadata:
+        name: app=python-basic
+      items:
+        - apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            labels:
+              app: python-basic
+              app.kubernetes.io/component: python-basic
+              app.kubernetes.io/instance: python-basic
+              app.kubernetes.io/name: python-basic
+              app.kubernetes.io/part-of: sample-app
+              app.openshift.io/runtime: python-basic
+            name: python-basic
+          spec:
+            selector:
+              matchLabels:
+                app: python-basic
+            template:
+              metadata:
+                labels:
+                  app: python-basic
+                  deploymentconfig: python-basic
+              spec:
+                containers:
+                  - env:
+                      - name: PROJECTS_ROOT
+                        value: /projects
+                      - name: PROJECT_SOURCE
+                        value: /projects
+                    image: >-
+                      image-registry.openshift-image-registry.svc:5000/my-cool-app/python-basic@sha256:7802abbbca0fdf9beb30397d9d6aea054989052634f2b6cc05a5153a8fb44954
+                    imagePullPolicy: Always
+                    name: python-basic
+                    ports:
+                      - containerPort: 8081
+                        name: 8081-tcp
+                        protocol: TCP
+                    resources:
+                      limits:
+                        memory: 1Gi
+                    terminationMessagePath: /dev/termination-log
+                    terminationMessagePolicy: File
+                dnsPolicy: ClusterFirst
+                restartPolicy: Always
+                schedulerName: default-scheduler
+                securityContext: {}
+                terminationGracePeriodSeconds: 30
+        - kind: Service
+          apiVersion: v1
+          metadata:
+            labels:
+              app: python-basic
+              app.kubernetes.io/component: python-basic
+              app.kubernetes.io/instance: python-basic
+              app.kubernetes.io/name: python-basic
+              app.kubernetes.io/part-of: sample-app
+              app.openshift.io/runtime: python-basic
+            name: python-basic
+          spec:
+            type: ClusterIP
+            selector:
+              app: python-basic
+              deploymentconfig: python-basic
+            ports:
+              - port: 8081
+  - type: cheEditor
+    alias: theia-editor
+    id: eclipse/che-theia/next
