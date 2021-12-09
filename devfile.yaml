@@ -1,0 +1,13 @@
+apiVersion: 1.0.0
+metadata:
+ name: minimal-workspace
+components:
+ - type: openshift
+   reference: https://raw.githubusercontent.com/redhat-developer/devfile/master/samples/web-nodejs-with-db-sample/mongo-db.yaml
+ - alias: nodejs-app
+   type: openshift
+   reference: https://raw.githubusercontent.com/redhat-developer/devfile/master/samples/web-nodejs-with-db-sample/nodejs-app.yaml
+   entrypoints:
+     - command: ['sleep']  
+       args: ['infinity']
+
