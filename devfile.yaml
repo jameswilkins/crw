@@ -20,11 +20,6 @@ projects:
       branch: '1.1.0'
 
 components:
-  - type: cheEditor
-    id: eclipse/che-theia/7.10.0
-    alias: che-theia
-    memoryLimit: 3072Mi
-
   - type: dockerimage
     image: 'quay.io/eclipse/che-theia-dev:next'
     alias: che-dev
