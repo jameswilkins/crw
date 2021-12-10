@@ -1,78 +1,106 @@
+# Copyright (c) 2020 Red Hat, Inc.
+# This program and the accompanying materials are made
+# available under the terms of the Eclipse Public License 2.0
+# which is available at https://www.eclipse.org/legal/epl-2.0/
+#
+# SPDX-License-Identifier: EPL-2.0
+#
+# See: https://sipb.mit.edu/doc/safe-shell/
+
 apiVersion: 1.0.0
+
 metadata:
-  name: chectl-generated
+  name: kubernetes-tooling-dev
+
+projects:
+  - name: che-sidecar-kubernetes-tooling
+    source:
+      location: 'https://github.com/che-dockerfiles/che-sidecar-kubernetes-tooling'
+      type: git
+      branch: '1.1.0'
+
 components:
-  - type: kubernetes
-    alias: app=python-basic
-    referenceContent: |
-      kind: List
-      apiVersion: v1
-      metadata:
-        name: app=python-basic
-      items:
-        - apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            labels:
-              app: python-basic
-              app.kubernetes.io/component: python-basic
-              app.kubernetes.io/instance: python-basic
-              app.kubernetes.io/name: python-basic
-              app.kubernetes.io/part-of: sample-app
-              app.openshift.io/runtime: python-basic
-            name: python-basic
-          spec:
-            selector:
-              matchLabels:
-                app: python-basic
-            template:
-              metadata:
-                labels:
-                  app: python-basic
-                  deploymentconfig: python-basic
-              spec:
-                containers:
-                  - env:
-                      - name: PROJECTS_ROOT
-                        value: /projects
-                      - name: PROJECT_SOURCE
-                        value: /projects
-                    image: >-
-                      image-registry.openshift-image-registry.svc:5000/my-cool-app/python-basic@sha256:7802abbbca0fdf9beb30397d9d6aea054989052634f2b6cc05a5153a8fb44954
-                    imagePullPolicy: Always
-                    name: python-basic
-                    ports:
-                      - containerPort: 8081
-                        name: 8081-tcp
-                        protocol: TCP
-                    resources:
-                      limits:
-                        memory: 1Gi
-                    terminationMessagePath: /dev/termination-log
-                    terminationMessagePolicy: File
-                dnsPolicy: ClusterFirst
-                restartPolicy: Always
-                schedulerName: default-scheduler
-                securityContext: {}
-                terminationGracePeriodSeconds: 30
-        - kind: Service
-          apiVersion: v1
-          metadata:
-            labels:
-              app: python-basic
-              app.kubernetes.io/component: python-basic
-              app.kubernetes.io/instance: python-basic
-              app.kubernetes.io/name: python-basic
-              app.kubernetes.io/part-of: sample-app
-              app.openshift.io/runtime: python-basic
-            name: python-basic
-          spec:
-            type: ClusterIP
-            selector:
-              app: python-basic
-              deploymentconfig: python-basic
-            ports:
-              - port: 8081
   - type: cheEditor
-    alias: theia-editor
-    id: eclipse/che-theia/next
+    id: eclipse/che-theia/7.10.0
+    alias: che-theia
+    memoryLimit: 3072Mi
+
+  - type: dockerimage
+    image: 'quay.io/eclipse/che-theia-dev:next'
+    alias: che-dev
+    mountSources: true
+    endpoints:
+      - name: theia-dev-flow
+        port: 3010
+        attributes:
+          protocol: http
+          public: 'true'
+    memoryLimit: 2048Mi
+
+  - type: chePlugin
+    reference: >-
+      https://raw.githubusercontent.com/vitaliy-guliy/che-plugin-registry/buildah-base/v3/plugins/containers/buildah/1.14.0/meta.yaml
+    memoryLimit: 3Gi
+    alias: buildah-dev
+
+commands:
+
+  #
+  # Logins to quay.io
+  #
+  - name: '3.1 Login to quay.io'
+    actions:
+      - workdir: /projects/che-sidecar-kubernetes-tooling
+        type: exec
+        command: |
+          if [ ! -f "/tmp/username" ]; then
+            read -p "Username: " USERNAME &&
+            buildah login --username $USERNAME quay.io &&
+            echo $USERNAME > /tmp/username &&
+            echo -e "\e[32mDone.\e[0m"
+          else
+            echo 'You already logged in as' `cat /tmp/username`
+          fi
+        component: buildah-dev
+
+  #
+  # Builds image with Kubernetes plugin
+  #
+  - name: '3.2 Build the image'
+    actions:
+      - workdir: /projects/che-sidecar-kubernetes-tooling
+        type: exec
+        command: |
+          if [ -f "/tmp/username" ]; then
+              USERNAME=`cat /tmp/username`
+              buildah bud -t quay.io/$USERNAME/che-sidecar-kubernetes-tooling:dev .
+              echo 'Image built'
+              buildah images
+              echo -e "\e[32mDone.\e[0m"
+          else
+              echo 'You need to login the first'
+          fi
+        component: buildah-dev
+
+  #
+  # Pushes the image to quay.io
+  # 
+  - name: '3.3 Push to quay.io'
+    actions:
+      - workdir: /projects/che-sidecar-kubernetes-tooling
+        type: exec
+        command: |
+          if [ -f "/tmp/username" ]; then
+              USERNAME=`cat /tmp/username`
+              PLUGIN_IMAGE_ID=`buildah images -q quay.io/$USERNAME/che-sidecar-kubernetes-tooling`
+              echo 'The last built image ID is :' $PLUGIN_IMAGE_ID
+              PLUGIN_IMAGE=quay.io/$USERNAME/che-sidecar-kubernetes-tooling:dev
+              echo 'Pushing image' $PLUGIN_IMAGE
+              echo $PLUGIN_IMAGE > /tmp/plugin_image
+              buildah push $PLUGIN_IMAGE_ID docker://$PLUGIN_IMAGE
+              echo -e "\e[32mDone.\e[0m"
+          else
+              echo 'The first, you need to login and build the image'
+          fi
+        component: buildah-dev
+
